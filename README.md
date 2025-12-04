@@ -17,7 +17,7 @@ Different scenarios will be compared, including no vaccination and vaccination a
 
 First, you need to install EMULSION. For more information see [here](https://sourcesup.renater.fr/www/emulsion-public/pages/Install.html).
 
-The EMULSION model as specified in the [YAML file](sep-bact-state-healthy.yaml) can be run directly from the command prompt. Alternatively, the [batch_run.py](batch_run.py) script can be used to run multiple scenarios at once.
+The EMULSION model as specified in the [YAML file](sep-bact-state.yaml) can be run directly from the command prompt. Alternatively, the [batch_run.py](batch_run.py) script can be used to run multiple scenarios at once.
 
 Broiler growth and feed intake is not implemented within the EMULSION model; instead, an [R script](output_processed-G.R) is used to calculate daily growth, flock weight and feed use afterwards, based on the number of chickens with reduced growth at each time step (day).
 
