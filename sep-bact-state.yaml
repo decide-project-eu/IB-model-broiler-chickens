@@ -1,0 +1,732 @@
+---
+# ! Based on alternative.yaml but now infection doesn't happen at day 1, but day 28.
+# Created 17-10-25
+
+# Model without intervention (vaccination)
+
+# Features:
+# - Bacterial subclinical and clinical infections in a separate bacterial_state. With a time between IB infection and secondary infection.
+# - Infection at day 28 --> no age variation in infectious period/clinical signs necessary
+# - respiratory signs as separate state machine
+# - growth as separate state machine --> further analysed in R (adding daily gain of each day)
+
+# Not implemented yet:
+# - Antibiotic treatments: I put in a first idea, but trigger for treatment is not yet decided, and I think it doesn't work as expected yet.
+#       Maybe make this an event?
+# - stop_condition: Early slaughter when flock is too ill but antibiotics cannot be administered (waiting time) -> ?
+
+# Not going to be implemented?
+# - Late slaughter when desired final weight is not reached yet --> difficult because weight is calculated afterwards. Maybe run extra days in all models?
+
+# Questions/problems:
+# - Transistion from NB to pre-Bacterial should only happen for IB infected birds. Do the conditions is_I0 etc. work right?
+# - Does the 'proba' of going from NB to pre-bacterial (PBS and PBC) work right? (probability 0.5 means +- 50% go to this group?)
+# - Which rate to use instead of proba = 1? something very high?
+# - Mortality is implemented both in health_state and bacterial_state. I think mortality is summed? from the outputs it seems correct.
+# - is it possible to save csv under a different name?
+
+# Questions on model decisions
+# - Do we really need the I0, I1, I2 separately? Alternative: just use I, then use respiratory_state and growth_state to incorporate a
+#   % of birds that have clinical signs. Then subclinical birds are still incorporated but differently. I1 and I2 are taken together (averaged).
+
+
+# EMULSION (Epidemiological Multi-Level Simulation framework)
+# ===========================================================
+# 
+# Contributors and contact:
+# -------------------------
+# 
+#     - Sébastien Picault (sebastien.picault@inrae.fr)
+#     - Yu-Lin Huang
+#     - Vianney Sicard
+#     - Sandie Arnoux
+#     - Gaël Beaunée
+#     - Pauline Ezanno (pauline.ezanno@inrae.fr)
+# 
+#     INRAE, Oniris, BIOEPAR, 44300, Nantes, France
+# 
+# 
+# How to cite:
+# ------------
+# 
+#     S. Picault, Y.-L. Huang, V. Sicard, S. Arnoux, G. Beaunée,
+#     P. Ezanno (2019). "EMULSION: Transparent and flexible multiscale
+#     stochastic models in human, animal and plant epidemiology", PLoS
+#     Computational Biology 15(9): e1007342. DOI:
+#     10.1371/journal.pcbi.1007342
+# 
+# 
+# License:
+# --------
+# 
+#     Copyright 2016 INRAE and Univ. Lille
+# 
+#     Inter Deposit Digital Number: IDDN.FR.001.280043.000.R.P.2018.000.10000
+# 
+#     Agence pour la Protection des Programmes,
+#     54 rue de Paradis, 75010 Paris, France
+# 
+#     Licensed under the Apache License, Version 2.0 (the "License");
+#     you may not use this file except in compliance with the License.
+#     You may obtain a copy of the License at
+# 
+#         http://www.apache.org/licenses/LICENSE-2.0
+# 
+#     Unless required by applicable law or agreed to in writing, software
+#     distributed under the License is distributed on an "AS IS" BASIS,
+#     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#     See the License for the specific language governing permissions and
+#     limitations under the License.
+
+#   _____                           _
+#  / ____|                         | |
+# | |  __  ___ _ __   ___ _ __ __ _| |
+# | | |_ |/ _ \ '_ \ / _ \ '__/ _` | |
+# | |__| |  __/ | | |  __/ | | (_| | |
+#  \_____|\___|_| |_|\___|_|  \__,_|_|
+
+#  _____        __                           _   _
+# |_   _|      / _|                         | | (_)
+#   | |  _ __ | |_ ___  _ __ _ __ ___   __ _| |_ _  ___  _ __
+#   | | | '_ \|  _/ _ \| '__| '_ ` _ \ / _` | __| |/ _ \| '_ \
+#  _| |_| | | | || (_) | |  | | | | | | (_| | |_| | (_) | | | |
+# |_____|_| |_|_| \___/|_|  |_| |_| |_|\__,_|\__|_|\___/|_| |_|
+
+
+# NAME OF THE DISEASE
+model_name: IBV_spread
+
+model_info:
+  abstract: 'This model is aimed at simulation an IBV outbreak in a broiler house. Infection with IBV happens at day 28. The pathogenicity of IBV is based on generally found strains in the NL (M41, QX-like, ...)'
+
+#  _______ _
+# |__   __(_)
+#    | |   _ _ __ ___   ___
+#    | |  | | '_ ` _ \ / _ \
+#    | |  | | | | | | |  __/
+#    |_|  |_|_| |_| |_|\___|
+
+
+# TIME INFORMATION
+time_info:
+  time_unit: days
+  delta_t: 1
+  total_duration: '42'
+# day of thinning is in parameters: thinning_time
+# note: day starts at 0
+
+
+#  _                    _
+# | |                  | |
+# | |     _____   _____| |___
+# | |    / _ \ \ / / _ \ / __|
+# | |___|  __/\ V /  __/ \__ \
+# |______\___| \_/ \___|_|___/
+
+
+# LEVELS OF AGENTS
+levels:
+  individuals:
+    desc: 'level of individuals'
+  population:
+    desc: 'level of the population'
+    contains:
+      - individuals
+    aggregation_type: 'compartment'
+    default_prototype: default_population
+
+
+
+
+#  _____
+# |  __ \
+# | |__) | __ ___   ___ ___  ___ ___  ___  ___
+# |  ___/ '__/ _ \ / __/ _ \/ __/ __|/ _ \/ __|
+# | |   | | | (_) | (_|  __/\__ \__ \  __/\__ \
+# |_|   |_|  \___/ \___\___||___/___/\___||___/
+
+
+
+# LIST OF PROCESSES TO BE EXECUTED AFTER EACH OTHER DURING EACH TIME STEP
+processes:
+  population:
+    - treatment
+  individuals:
+    - health_state
+    - bacterial_state
+    - respiratory_state
+    - growth_state
+    - thinning_state
+
+
+    
+#   _____ _        _         __  __            _     _
+#  / ____| |      | |       |  \/  |          | |   (_)
+# | (___ | |_ __ _| |_ ___  | \  / | __ _  ___| |__  _ _ __   ___  ___
+#  \___ \| __/ _` | __/ _ \ | |\/| |/ _` |/ __| '_ \| | '_ \ / _ \/ __|
+#  ____) | || (_| | ||  __/ | |  | | (_| | (__| | | | | | | |  __/\__ \
+# |_____/ \__\__,_|\__\___| |_|  |_|\__,_|\___|_| |_|_|_| |_|\___||___/
+
+# DESCRIPTION OF THE STATE MACHINES INVOLVED IN THE MODEL
+# Each state machine is composed at least of several states.
+# The name of a state machine defines an individual variable which
+# contains the value of the current state in the individual.
+# Transitions define how each change can change to another one.
+# Productions define how individuals in one state can produce
+# new individuals in another state.
+
+state_machines:
+  #-------------
+  # Treatment (population scale)
+  #-------------
+  treatment:
+    desc: 'A state machine to trigger treatment at population scale'
+    states:
+      - NT:
+          name: 'NoTreatment'
+          desc: 'No treatment in the current population'
+          fillcolor: 'green'
+      - TT:
+          on_enter:
+            - set_var: treatment_start_time
+              value: 'time'
+            - set_var: treatment_triggered
+              value: 1
+            - message: 'Treatment triggered'
+          name: 'Treated'
+          desc: 'Treatment triggered by mortality above threshold'
+          fillcolor: 'red'
+    transitions:
+      - {from: NT, to: TT, proba: 'float(percentage_mortality > treatment_trigger)'}
+
+  #-------------
+  # Health state
+  #-------------
+
+  health_state:
+    desc: 'The state machine which defines the evolution of health states'
+    states:
+      - pI:
+          name: 'preInfectious'
+          desc: 'animals that will introduce the infection in the batch at introduction_time'
+          fillcolor: 'pink'
+      - S:
+          name: 'Susceptible'
+          desc: 'suceptible of becoming infected'
+          fillcolor: 'wheat'
+      - I0:
+          name: 'Infected_subclinical'
+          desc: 'infected and able to transmit the disease; no symptoms'
+          fillcolor: 'maroon'
+      - I1:
+          name: 'Infected_mild'
+          desc: 'infected and able to transmit the disease; mild symptoms'
+          fillcolor: 'darkkhaki'
+      - I2:
+          name: 'Infected_severe'
+          desc: 'infected and able to transmit the disease; severe symptoms'
+          fillcolor: 'brown'
+      - R:
+          name: 'Resistant'
+          desc: 'healthy again and resistant to infection'
+          fillcolor: 'deepskyblue'
+      - D:
+          name: 'Dead'
+          desc: 'compartment to put dead individuals'
+          on_enter:
+            - record_change: cum_mort_health_state   # variable to count number of dead chickens
+          autoremove: yes   # because otherwise dead birds get thinned in thinning_state
+
+    # Below, a list of transitions between states, with rate or probabilities. Rates are automatically converted into probabilities 
+    # w.r.t the duration of the time step (delta_t), assuming a classical exponential distribution of durations in the states.
+    transitions:
+    # infection
+      - {from: pI, to: I0, proba: 'float(Eq(time, introduction_time))'}
+      - {from: S, to: I0, rate: 'force_of_infection * (1 - prop_mild - prop_severe)'}
+      - {from: S, to: I1, rate: 'force_of_infection * prop_mild'}
+      - {from: S, to: I2, rate: 'force_of_infection * prop_severe'}
+
+      # recovery
+      - {from: I0, to: R, rate: recovery}
+      - {from: I1, to: R, rate: recovery}
+      - {from: I2, to: R, rate: recovery}
+
+      # death
+      - {from: S, to: D, rate: 'normal_mortality'}
+      - {from: I0, to: D, rate: 'normal_mortality'}
+      - {from: I1, to: D, rate: 'normal_mortality'}
+      - {from: I2, to: D, rate: 'mortality_I2'}
+      - {from: R, to: D, rate: 'normal_mortality'}
+
+  #-------------
+  # Bacterial state
+  #-------------
+  bacterial_state:
+    desc: 'The state machine which defines the evolution of secondary bacterial infection'
+    states:
+      - NB:
+          name: 'No_bacterial'
+          desc: 'no bacterial infection'
+          fillcolor: 'wheat'
+      - PBS:
+          name: 'Pre_bacterial_subclinical'
+          desc: 'predisposed for subclinical bacterial infection after x days'
+          duration: t_until_bact_inf
+          fillcolor: 'deepskyblue'
+      - PBC:
+          name: 'Pre_bacterial_clinical'
+          desc: 'predisposed for clinical bacterial infection after x days'
+          duration: t_until_bact_inf
+          fillcolor: 'blue'
+      - BS:
+          name: 'Bacterial_subclinical'
+          desc: 'subclinical bacterial infection'
+          fillcolor: 'purple'
+      - BC:
+          name: 'Bacterial_clinical'
+          desc: 'clinical bacterial infection'
+          fillcolor: 'green'
+      - De:
+          name: 'Dead'
+          desc: 'dead'
+          on_enter:
+            - record_change: cum_mort_bact_state   # variable to count number of dead chickens
+          autoremove: yes
+
+    transitions:
+      # from no bact infection to 'waiting time'
+      - {from: NB, to: PBS, proba: 'is_I0 * prop_bact_subc_inf_I0'}
+      - {from: NB, to: PBS, proba: 'is_I1* prop_bact_subc_inf_I1'}
+      - {from: NB, to: PBS, proba: 'is_I2 * prop_bact_subc_inf_I2'}
+
+      - {from: NB, to: PBC, proba: 'is_I0 * prop_bact_clin_inf_I0'}
+      - {from: NB, to: PBC, proba: 'is_I1 * prop_bact_clin_inf_I1'}
+      - {from: NB, to: PBC, proba: 'is_I2 * prop_bact_clin_inf_I2'}
+
+      # after waiting time
+      - {from: PBS, to: BS, proba: '1'}
+      - {from: PBC, to: BC, proba: '1'}
+
+      # recovery
+      - {from: BS, to: NB, proba: 'p_bacterial_recovery_BS'}
+      - {from: BC, to: NB, proba: 'p_bacterial_recovery_BC'}
+
+      # death
+      - {from: BC, to: De, proba: 'p_mortality_BC'}
+
+      # treatment
+      - from: BS
+        to: NB
+        proba: 'treatment_triggered * float(Eq(time, treatment_start_time + treatment_duration)) * antibiotic_effectiveness'
+        on_cross:
+          - record_change: cum_treated_BS
+          - message: 'BS Treated'
+      - from: BC
+        to: NB
+        proba: 'treatment_triggered * float(Eq(time, treatment_start_time + treatment_duration)) * antibiotic_effectiveness'
+        on_cross:
+          - record_change: cum_treated_BC
+          - message: 'BC Treated'
+
+
+
+  #-------------
+  # Respiratory state
+  #-------------
+
+  respiratory_state:
+    desc: 'The state machine which defines clinical signs. NOTE: currently only of IB, not bacterial infection!'
+    states:
+      - H:
+          name: 'Healthy'
+          desc: 'No clinical respiratory signs. Can also be subclinical'
+          fillcolor: 'Gold'
+      - Hi:
+          name: 'Healthy_infected'
+          desc: 'Infected but no respiratory signs yet'
+          duration: 'time_before_respiratory_signs'
+      - RS:
+          name: 'Respiratory_signs'
+          desc: 'Respiratory signs: discharge from eyes and nostrils, sounds (sneezing, coughing, rales...)'
+          fillcolor: 'FireBrick'
+          duration: 'duration_respiratory_signs'
+
+    transitions:
+    # infection / development of clinical signs
+    - {from: H, to: Hi, proba: 'is_I1'}
+    - {from: H, to: Hi, proba: 'is_I2'}
+    - {from: Hi, to: RS, proba: '1'}
+
+    # recovery
+    - {from: RS, to: H, proba: '1'}
+
+
+ #-------------
+  # Growth state
+  #-------------
+
+  growth_state:
+    desc: 'The state machine which defines reduced growth (as a sign of IB and bacterial infections)'
+    states:
+      - NG:
+          name: 'Normal growth'
+          desc: 'Healthy or subclinical IB infection'
+          fillcolor: 'GreenYellow'
+      - NGi1:
+          name: 'Normal_growth_infected_mild'
+          desc: 'Infected with mild clinical signs, but no reduced growth yet'
+          duration: 'time_before_reduced_growth'
+          fillcolor: 'LightSeaGreen'
+      - NGi2:
+          name: 'Normal_growth_infected_severe'
+          desc: 'Infected with severe clinical signs, but no reduced growth yet'
+          duration: 'time_before_reduced_growth'
+          fillcolor: 'LightBlue'
+      - RGi1:
+          name: 'Reduced_growth_mild'
+          desc: 'Reduced growth in the group with mild clinical signs of IB'
+          fillcolor: 'SeaGreen'
+          duration: 'duration_reduced_growth'
+      - RGi2:
+          name: 'Reduced_growth_severe'
+          desc: 'Reduced growth in chickens with severe clinical signs of IB'
+          duration: 'duration_reduced_growth'  # except in case of secondary infection
+          fillcolor: 'DarkTurquoise'
+      - RGbs:
+          name: 'Reduced_growth_bact_subc'
+          desc: 'Reduced growth in chickens with subclinical bacterial infection'
+          fillcolor: 'DarkSlateBlue'
+      - RGbc:
+          name: 'Reduced_growth_bact_clin'
+          desc: 'Reduced growth in chickens with clinical bacterial infection'
+          fillcolor: 'DarkViolet'
+
+    transitions:
+    # infection
+    - {from: NG, to: NGi1, proba: 'is_I1'}
+    - {from: NG, to: NGi2, proba: 'is_I2'}
+
+    # development of reduced growth
+    - {from: NGi1, to: RGi1, proba: '1'}
+    - {from: NGi2, to: RGi2, proba: '1'}
+
+    # secondary bacterial infection
+    - {from: RGi1, to: RGbs, escape: yes, proba: 'is_BS'}   # despite a duration for RGi1, you can still escape to RGbs if in BS state
+    - {from: RGi1, to: RGbc, escape: yes, proba: 'is_BC'}
+    - {from: RGi2, to: RGbs, escape: yes, proba: 'is_BS'}
+    - {from: RGi2, to: RGbc, escape: yes, proba: 'is_BC'}
+
+    # recovery
+    - {from: RGi1, to: NG, proba: 1 }
+    - {from: RGi2, to: NG, proba: 1 }
+    - {from: RGbs, to: NG, proba: 'is_NB'}
+    - {from: RGbc, to: NG, proba: 'is_NB'}
+
+    # Notes: chickens can only go to reduced_growth_bacterial groups (RGbs, RGbc) from the reduced_growth IB groups
+    # because the durations of IB infection, time until clinical signs and time until secondary bact. infection 
+    # make it impossible to go from normal growth to RGbs.
+
+
+  #-------------
+  # Thinning state
+  #-------------
+
+  thinning_state:
+    desc: 'The state machine which defines thinning of the flock based on thinning date'
+    states:
+      - P:
+          name: 'Present'
+          desc: 'Not thinned'
+          fillcolor: 'darkgreen'
+      - T:
+          name: 'Thinned'
+          desc: 'Birds removed at thinning'
+          autoremove: yes
+
+    transitions:
+    # two transitions to separate thinning of healthy and diseased birds
+      - from: P
+        to: T
+        amount: 'ROUND(float(Eq(time, thinning_time)) * OR(is_I0, is_I1, is_I2) * thinning_number * DIV(total_my_health_state_my_bacterial_state_my_respiratory_state_my_growth_state_P, total_population))'  #modulates thinning_number by the proportion of animals in each health_state
+        # if you add another state machine (e.g. age_when_infected) then you have to compute total_my_age_when_infected_my_health_state_P instead (OR(...) stays the same)
+        # float(Eq(time, thinning_time)) acts like 'when', because it is 0 if time is not equal to thinning_time
+        on_cross:
+          - record_change: cum_thinning_infected   # count number of thinned birds (diseased)
+      - from: P
+        to: T
+        amount: 'ROUND(float(Eq(time, thinning_time)) * OR(is_S, is_R) * thinning_number * DIV(total_my_health_state_my_bacterial_state_my_respiratory_state_my_growth_state_P, total_population))'
+        on_cross:
+          - record_change: cum_thinning_healthy  # count number of thinned birds (healthy)
+
+# Warning: In a state machine, all quantifiers may be used. However, from a given origin state, 
+# all transitions that can be used simultaneously must have the same quantifiers 
+# (i.e. only rate, or only proba, or only amount/amount-all-but).
+
+#  _____                               _
+# |  __ \                             | |
+# | |__) |_ _ _ __ __ _ _ __ ___   ___| |_ ___ _ __ ___
+# |  ___/ _` | '__/ _` | '_ ` _ \ / _ \ __/ _ \ '__/ __|
+# | |  | (_| | | | (_| | | | | | |  __/ ||  __/ |  \__ \
+# |_|   \__,_|_|  \__,_|_| |_| |_|\___|\__\___|_|  |___/
+
+parameters:
+
+  # initial values
+  initial_population_size:
+    desc: 'initial number of animals in the population'
+    value: 30000
+  initial_infected:
+    desc: 'initial number of infected animals in the population'
+    value: 5
+  
+  # counts
+  total_infectious:
+    desc: 'all infectious groups'
+    value: 'total_I0 + total_I1 + total_I2'
+  total_alive:
+    desc: 'all birds that are not dead nor thinned'
+    value: 'total_S + total_I0 + total_I1 + total_I2 + total_R'
+
+  # IBV
+  introduction_time:
+    desc: 'day when virus is introduced in the flock'
+    value: '28'
+#  n_initial_infection:   # removed because initial_infected is used.
+#    desc: 'number of infected chickens at introduction'
+#    value: '5'
+
+  beta:
+    desc: 'transmission rate from infectious individuals (/day)'
+    value: '0.8'
+  recovery:
+    desc: 'recovery rate (gamma)'
+    source: 'estimate'
+    value: '1/14'
+  force_of_infection:
+    desc: 'force of infection' 
+    value: 'beta * total_infectious / total_alive'
+  
+  prop_mild:
+    desc: 'proportion of infected birds that show mild clinical signs (instead of subclinical or severe)'
+    value: '0.7'
+  prop_severe:
+    desc: 'proportion of infected birds that show severe clinical signs'
+    value: '0.2'
+
+  # mortality
+  normal_mortality:
+    desc: 'mortality rate (/day)'
+    value: 0.00071
+  mortality_I2:
+    desc: 'mortality rate (/day) in case of severe IB infection'
+    value: '3 * normal_mortality'
+  mortality_BC:
+    desc: 'mortality rate (/day) in case of secondary clinical infection'
+    value: '0.40 / 14' # = 40x normal mortality
+  p_mortality_BC:
+    desc: 'mortality probability (per time step), assuming that the rate is low enough to ensure that p_mortality_BC + p_bacterial_recovery_BC + treatment_effectiveness remains below 1'
+    value: 'DIV(mortality_BC, bacterial_recovery_rate + mortality_BC) * (1 - exp(-1 * (bacterial_recovery_rate + mortality_BC) * delta_t))'
+
+  # clinical signs
+  time_before_respiratory_signs:
+    desc: 'days between infection with IB and respiratory signs'
+    value: '1'
+  duration_respiratory_signs:
+    desc: 'length of clinical (respiratory) disease caused by IB'
+    value: '7'
+  time_before_reduced_growth:
+    desc: 'days between infection with IB and reduced growth'
+    value: '2'
+  duration_reduced_growth:
+    desc: 'length of reduced growth caused by IB'
+    value: '14'
+
+  # thinning
+  thinning_number:
+    desc: 'number of birds that is removed before slaughter'
+    value: 7500
+  thinning_time:
+    desc: 'date at which thinning occurs (days)'
+    value: 34
+  
+  # secondary infections
+  t_until_bact_inf:
+    desc: 'days from IB infection until bacterial infection'
+    source: 'expert: 4-7 days'
+    value: 4
+  bacterial_recovery_rate:
+    desc: 'rate of recovering from secondary infection.'
+    source: 'based on estimate of 14 days infected'
+    value: '1/14'
+  p_bacterial_recovery_BS:
+    desc: 'probability to recover from secondary infection (assuming that the rate is low enough to ensure that p_bacterial_recovery_BS + treatment_effectiveness remains below 1'
+    value: '1 - exp(-1 * bacterial_recovery_rate * delta_t)'
+  p_bacterial_recovery_BC:
+    desc: 'probability to recover from secondary infection (assuming that the rate is low enough to ensure that p_bacterial_recovery_BC + p_mortality_BC + treatment_effectiveness remains below 1'
+    value: 'DIV(bacterial_recovery_rate, bacterial_recovery_rate + mortality_BC) * (1 - exp(-1 * (bacterial_recovery_rate + mortality_BC) * delta_t))'
+
+  prop_bact_subc_inf_I0: 
+    desc: 'proportion of secondary subclinical bacterial infection in I0 group'
+    value: '0.02'
+  prop_bact_subc_inf_I1: 
+    desc: 'proportion of secondary subclinical bacterial infection in I1 group'
+    value: '0.05'
+  prop_bact_subc_inf_I2: 
+    desc: 'proportion of secondary subclinical bacterial infection in I2 group'
+    value: '0.1'
+  prop_bact_clin_inf_I0: 
+    desc: 'proportion of secondary clinical bacterial infection in I0 group'
+    value: '0.005'
+  prop_bact_clin_inf_I1: 
+    desc: 'proportion of secondary clinical bacterial infection in I1 group'
+    value: '0.01'
+  prop_bact_clin_inf_I2: 
+    desc: 'proportion of secondary clinical bacterial infection in I2 group'
+    value: '0.05'
+
+  # antibiotic treatment
+  treatment_trigger:
+    desc: 'mortality above which antibiotic treatment is started'
+    value: '4'  # not realistic! To check
+  antibiotic_effectiveness:
+    desc: 'fraction of birds cured of secondary infection after treatment'
+    value: '0.85'
+  treatment_duration:
+    desc: 'delay between beginning of treatment and effect (days)'
+    value: 2 # guess! should be day when most recovery is seen, somewhere between 1-5 days of treatment
+
+  # outputs
+  percentage_prevalence:
+    desc: '% of animals infected'
+    value: '100 * total_infectious / total_alive'
+  percentage_prevalence_secondary:
+    desc: '% of animals with secondary infection'
+    value: '100 * (total_BS + total_BC) / total_alive'
+  cum_thinning_total:
+    desc: 'just to check how many birds are thinned'
+    value: 'cum_thinning_healthy + cum_thinning_infected'
+  percentage_mortality:
+    desc: 'TOTAL mortality as % of total, both in health_state and in bacterial_state'
+    value: '100 * (cum_mort_health_state + cum_mort_bact_state) / initial_population_size'
+  percentage_mortality_10:
+    desc: 'TOTAL mortality as % of total, both in health_state and in bacterial_state  * 10 for visualization'
+    value: '10 * percentage_mortality'
+  cum_treated:
+    desc: 'total treated animals'
+    value: 'cum_treated_BS + cum_treated_BC'
+  percentage_respiratory_signs:
+    desc: '% resp signs'
+    value: '100 * total_RS / total_alive'
+
+
+
+
+#  _____           _        _
+# |  __ \         | |      | |
+# | |__) | __ ___ | |_ ___ | |_ _   _ _ __   ___  ___
+# |  ___/ '__/ _ \| __/ _ \| __| | | | '_ \ / _ \/ __|
+# | |   | | | (_) | || (_) | |_| |_| | |_) |  __/\__ \
+# |_|   |_|  \___/ \__\___/ \__|\__, | .__/ \___||___/
+#                                __/ | |
+#                               |___/|_|
+
+# PROTOTYPES describe typical individuals, characterized by specific
+# values of their variables
+prototypes:
+  population:
+    - default_population:
+        treatment: NT
+        treatment_start_time: -1
+        treatment_triggered: 0
+        cum_thinning_infected: 0
+        cum_thinning_healthy: 0
+        cum_mort_health_state: 0
+        cum_mort_bact_state: 0
+        cum_treated_BS: 0
+        cum_treated_BC: 0
+  individuals:
+    - healthy:
+        desc: 'healthy individuals'
+        health_state: S
+        bacterial_state: NB
+        respiratory_state: H
+        growth_state: NG
+        thinning_state: P
+    - infected:
+        desc: 'infected individuals'
+        health_state: I0
+        bacterial_state: NB
+        respiratory_state: Hi
+        growth_state: NGi1
+        thinning_state: P
+    - late_infected:
+        desc: 'individuals that become infected at introduction_time'
+        health_state: pI
+        bacterial_state: NB
+        respiratory_state: H
+        growth_state: NG
+        thinning_state: P
+
+
+
+#  _____       _ _   _       _
+# |_   _|     (_) | (_)     | |
+#   | |  _ __  _| |_ _  __ _| |
+#   | | | '_ \| | __| |/ _` | |
+#  _| |_| | | | | |_| | (_| | |
+# |_____|_| |_|_|\__|_|\__,_|_|
+
+#   _____                _ _ _   _
+#  / ____|              | (_) | (_)
+# | |     ___  _ __   __| |_| |_ _  ___  _ __  ___
+# | |    / _ \| '_ \ / _` | | __| |/ _ \| '_ \/ __|
+# | |___| (_) | | | | (_| | | |_| | (_) | | | \__ \
+#  \_____\___/|_| |_|\__,_|_|\__|_|\___/|_| |_|___/
+
+# INITIAL CONDITIONS FOR THE SIMULATION
+# Initial conditions describe the prototypes
+# involved with the amount of individuals in each of those prototypes
+initial_conditions:
+  population:
+    - prototype: healthy
+      amount: 'initial_population_size - initial_infected'
+    - prototype: late_infected
+      amount: 'initial_infected'
+
+
+#   ____        _               _
+#  / __ \      | |             | |
+# | |  | |_   _| |_ _ __  _   _| |_ ___
+# | |  | | | | | __| '_ \| | | | __/ __|
+# | |__| | |_| | |_| |_) | |_| | |_\__ \
+#  \____/ \__,_|\__| .__/ \__,_|\__|___/
+#                  | |
+#                  |_|
+
+outputs:
+  type: csv
+  population:
+    period: 1
+    extra_vars:
+      # inputs
+      - introduction_time
+      - beta
+      - recovery
+      - t_until_bact_inf
+      - treatment_trigger
+      - mortality_I2
+      - mortality_BC
+      # outputs
+      - cum_thinning_infected
+      - cum_thinning_healthy
+      - cum_thinning_total
+      - cum_mort_health_state
+      - cum_mort_bact
+      - percentage_mortality_10
+      - percentage_prevalence
+      - percentage_prevalence_secondary
+      - percentage_respiratory_signs
+      - cum_treated
+      #- is_TT
+
+...
