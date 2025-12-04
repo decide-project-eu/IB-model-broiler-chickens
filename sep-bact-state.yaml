@@ -11,23 +11,11 @@
 # - growth as separate state machine --> further analysed in R (adding daily gain of each day)
 
 # Not implemented yet:
-# - Antibiotic treatments: I put in a first idea, but trigger for treatment is not yet decided, and I think it doesn't work as expected yet.
-#       Maybe make this an event?
+# - Antibiotic treatments: it is included in the model but the threshold needs to be determined
 # - stop_condition: Early slaughter when flock is too ill but antibiotics cannot be administered (waiting time) -> ?
 
 # Not going to be implemented?
-# - Late slaughter when desired final weight is not reached yet --> difficult because weight is calculated afterwards. Maybe run extra days in all models?
-
-# Questions/problems:
-# - Transistion from NB to pre-Bacterial should only happen for IB infected birds. Do the conditions is_I0 etc. work right?
-# - Does the 'proba' of going from NB to pre-bacterial (PBS and PBC) work right? (probability 0.5 means +- 50% go to this group?)
-# - Which rate to use instead of proba = 1? something very high?
-# - Mortality is implemented both in health_state and bacterial_state. I think mortality is summed? from the outputs it seems correct.
-# - is it possible to save csv under a different name?
-
-# Questions on model decisions
-# - Do we really need the I0, I1, I2 separately? Alternative: just use I, then use respiratory_state and growth_state to incorporate a
-#   % of birds that have clinical signs. Then subclinical birds are still incorporated but differently. I1 and I2 are taken together (averaged).
+# - Late slaughter when desired final weight is not reached yet --> difficult because weight is calculated afterwards. Maybe run extra days in all models? But probably this will not be relevant in the models (looking at the weight differences)
 
 
 # EMULSION (Epidemiological Multi-Level Simulation framework)
