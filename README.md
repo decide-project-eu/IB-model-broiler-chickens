@@ -17,9 +17,9 @@ Different scenarios can be compared, such as different introduction times, vacci
 
 First, you need to install EMULSION. For more information see [here](https://sourcesup.renater.fr/www/emulsion-public/pages/Install.html).
 
-The EMULSION model as specified in the [YAML file](sep-bact-state.yaml) can be run directly from the command prompt. Alternatively, the [run_scenarios.py](run_scenarios.py) script can be used to run multiple scenarios at once (with all combinations of parameters), and the [run_sens_analysis.py](run_sens_analysis.py) script can be used to do one-parameter-at-a-time sensitivity analysis.
+The EMULSION model as specified in the [YAML file](EMULSION_model/model.yaml) can be run directly from the command prompt. Alternatively, the [run_scenarios.py](EMULSION_model/run_scenarios.py) script can be used to run multiple scenarios at once (with all combinations of parameters), and the [run_sens_analysis.py](EMULSION_model/run_sens_analysis.py) script can be used to do one-parameter-at-a-time sensitivity analysis.
 
-Broiler growth and feed intake is not implemented within the EMULSION model; instead, an [R script](output_processed-G.R) is used to calculate daily growth, flock weight and feed use afterwards, based on the number of chickens with reduced growth at each time step.
+Broiler growth and feed intake is not implemented within the EMULSION model; instead, an [R script](R_model/R_scripts/output_processing.R) is used to calculate daily growth, flock weight and feed use afterwards, based on the number of chickens with reduced growth at each time step.
 
 The following R packages are used: purrr_1.1.0; dplyr_1.1.4. And for optional visualisations: patchwork_1.3.2; ggplot2_3.5.2; scales_1.4.
 
