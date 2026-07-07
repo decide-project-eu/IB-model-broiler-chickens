@@ -1,0 +1,33 @@
+project:
+  input_dir: "EMULSION_model/outputs/all_scenarios"  # 'counts.csv from EMULSION'
+  output_dir: "R_model/data"
+  sens_input_dir: "EMULSION_model/outputs/sens_analysis"
+  sens_output_dir: "R_model/data"
+  table_dir: "R_model/output_tables"
+  healthy_input: "EMULSION_model/outputs/healthy_scenario/counts.csv"
+  healthy_dir: "R_model/data/healthy_scenario"
+  summary_dir: "R_model/data/output_2026-07-07"
+
+R_model:
+  DOA: 0.0014
+  condemnation_base: 0.005
+  condemnation_B: 1
+  slaughter_price: 1.12  # / kg live weight
+  feed_price: 0.374 # /kg
+  ab_price_per_chick: 0.02
+  ab_price_constant: 178
+  vaccine_price_per_chick: 0.01
+  growth_factor: 'middle'
+  DG_change_IB: -0.05
+  DG_change_B: -0.2
+  FCR_change_IB: 0.03
+  FCR_change_B: 0.07
+  n_birds: 30000 #should come from EMULSION model
+
+R_sensitivity:
+  sens_growth_factor: ["low", "high"]
+  sens_condemnation: [0.50]
+  sens_slaughter_price: [0.56, 2.24]
+  sens_feed_price: [0.187, 0.748]
+  sens_ab_price_per_chick: [0.01, 0.04]
+
